@@ -1,9 +1,6 @@
-use crate::{
-    data::interface::GPUIDataInterface,
-    playback::{
-        interface::GPUIPlaybackInterface,
-        queue::{DataSource, QueueItemData},
-    },
+use crate::playback::{
+    interface::GPUIPlaybackInterface,
+    queue::{DataSource, QueueItemData},
 };
 use ahash::AHashMap;
 use gpui::*;
@@ -190,9 +187,9 @@ impl Queue {
                             .cloned();
                         let was_removed = prune_views(&views_model, &render_counter, idx, cx);
 
-                        if was_removed {
-                            cx.global::<GPUIDataInterface>().evict_cache();
-                        }
+                        // if was_removed {
+                        //     cx.global::<GPUIDataInterface>().evict_cache();
+                        // }
 
                         div()
                             .child(create_or_retrieve_view(

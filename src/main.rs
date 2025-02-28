@@ -1,6 +1,5 @@
 use services::mmb::lastfm::{LASTFM_API_KEY, LASTFM_API_SECRET};
 
-mod data;
 mod devices;
 mod library;
 mod media;

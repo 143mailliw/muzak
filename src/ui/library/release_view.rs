@@ -2,13 +2,8 @@ use std::sync::Arc;
 
 use gpui::*;
 use prelude::FluentBuilder;
-use tracing::debug;
 
 use crate::{
-    data::{
-        events::{ImageLayout, ImageType},
-        interface::GPUIDataInterface,
-    },
     library::{
         db::{AlbumMethod, LibraryAccess},
         types::{Album, Artist, Track},
@@ -24,6 +19,7 @@ use crate::{
             menu::{menu, menu_item},
         },
         constants::FONT_AWESOME,
+        data::Decode,
         models::{Models, PlaybackInfo},
         theme::Theme,
         util::drop_image_from_app,
@@ -32,7 +28,7 @@ use crate::{
 
 pub struct ReleaseView {
     album: Arc<Album>,
-    image: Option<Arc<RenderImage>>,
+    image: Entity<Option<Arc<RenderImage>>>,
     artist: Option<Arc<Artist>>,
     tracks: Arc<Vec<Track>>,
     track_list_state: ListState,
@@ -42,7 +38,7 @@ pub struct ReleaseView {
 impl ReleaseView {
     pub(super) fn new(cx: &mut App, album_id: i64) -> Entity<Self> {
         cx.new(|cx| {
-            let image = None;
+            let image_entity = cx.new(|_| None);
             // TODO: error handling
             let album = cx
                 .get_album_by_id(album_id, AlbumMethod::FullQuality)
@@ -52,36 +48,16 @@ impl ReleaseView {
                 .expect("Failed to retrieve tracks");
             let artist = cx.get_artist_by_id(album.artist_id).ok();
 
-            let image_transfer_model = cx.global::<Models>().image_transfer_model.clone();
-
-            cx.subscribe(
-                &image_transfer_model,
-                move |this: &mut ReleaseView, _, image, cx| {
-                    if image.0 == ImageType::AlbumArt(album_id) {
-                        debug!("captured decoded image for album ID: {}", album_id);
-                        this.image = Some(image.1.clone());
-
-                        cx.notify();
-                    }
-                },
-            )
-            .detach();
+            if let Some(image) = album.image.clone() {
+                cx.decode_image(image, false, image_entity.clone()).detach();
+            }
 
             cx.on_release(|this: &mut Self, cx: &mut App| {
-                if let Some(image) = this.image.clone() {
+                if let Some(image) = this.image.read(cx).clone() {
                     drop_image_from_app(cx, image);
                 }
             })
             .detach();
-
-            if let Some(image) = album.image.clone() {
-                cx.global::<GPUIDataInterface>().decode_image(
-                    image,
-                    ImageType::AlbumArt(album_id),
-                    ImageLayout::BGR,
-                    false,
-                );
-            }
 
             let tracks_clone = tracks.clone();
 
@@ -131,7 +107,7 @@ impl ReleaseView {
 
             ReleaseView {
                 album,
-                image,
+                image: image_entity,
                 artist,
                 tracks,
                 track_list_state: state,
@@ -144,6 +120,7 @@ impl ReleaseView {
 impl Render for ReleaseView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
+        let image = self.image.read(cx);
 
         div()
             .mt(px(24.0))
@@ -171,9 +148,9 @@ impl Render for ReleaseView {
                             .h(px(160.0))
                             .flex_shrink_0()
                             .overflow_hidden()
-                            .when(self.image.is_some(), |div| {
+                            .when(image.is_some(), |div| {
                                 div.child(
-                                    img(self.image.clone().unwrap())
+                                    img(image.clone().unwrap())
                                         .min_w(px(160.0))
                                         .min_h(px(160.0))
                                         .max_w(px(160.0))

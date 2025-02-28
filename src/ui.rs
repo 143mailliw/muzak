@@ -4,6 +4,7 @@ mod assets;
 pub mod components;
 mod constants;
 mod controls;
+pub mod data;
 mod global_actions;
 mod header;
 mod library;
