@@ -8,6 +8,7 @@ use std::{
 
 use ahash::AHashMap;
 use async_std::task;
+use globwalk::GlobWalkerBuilder;
 use gpui::{App, Global};
 use image::{codecs::jpeg::JpegEncoder, imageops::thumbnail, EncodableLayout};
 use sqlx::SqlitePool;
@@ -169,6 +170,28 @@ fn scan_file_with_provider(
     let len = provider.duration_secs().map_err(|_| ())?;
     provider.close().map_err(|_| ())?;
     Ok((metadata, len, image))
+}
+
+// Returns the first image (cover/front/folder.jpeg/png/jpeg) in the track's containing folder
+// Album art can be named anything, but this pattern is convention and the least likely to return a false positive
+fn scan_path_for_album_art(path: &Path) -> Option<Box<[u8]>> {
+    let glob = GlobWalkerBuilder::from_patterns(
+        path.parent().unwrap(),
+        &["{folder,cover,front}.{jpg,jpeg,png}"],
+    )
+    .case_insensitive(true)
+    .max_depth(1)
+    .build()
+    .expect("Failed to build album art glob")
+    .into_iter()
+    .filter_map(|e| e.ok());
+
+    for entry in glob {
+        if let Ok(bytes) = fs::read(entry.path()) {
+            return Some(bytes.into_boxed_slice());
+        }
+    }
+    return None;
 }
 
 impl ScanThread {
@@ -556,7 +579,11 @@ impl ScanThread {
     fn read_metadata_for_path(&mut self, path: &PathBuf) -> Option<FileInformation> {
         for (exts, provider) in &mut self.provider_table {
             if file_is_scannable_with_provider(path, exts) {
-                if let Ok(metadata) = scan_file_with_provider(path, provider) {
+                if let Ok(mut metadata) = scan_file_with_provider(path, provider) {
+                    if metadata.2.is_none() {
+                        metadata.2 = scan_path_for_album_art(path);
+                    }
+
                     return Some(metadata);
                 }
             }

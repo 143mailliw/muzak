@@ -17,6 +17,7 @@ clap = { version = "4", features = ["derive"] }
 cpal = "0.15"
 dateparser = "0.2"
 directories = "6"
+globwalk = "0.9.1"
 gpui = { git = "https://github.com/zed-industries/zed" }
 image = "0.25"
 intx = "0.1"
